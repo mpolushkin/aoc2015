@@ -1,0 +1,134 @@
+use std::error::Error;
+use std::str::FromStr;
+
+pub static INPUT: &str = include_str!("../input/day02.txt");
+
+#[derive(Debug, PartialEq)]
+struct Dimension {
+    l: u32,
+    w: u32,
+    h: u32,
+}
+
+impl FromStr for Dimension {
+    type Err = Box<dyn Error>;
+    fn from_str(value: &str) -> Result<Dimension, Self::Err> {
+        let elements: Vec<_> = value
+            .split('x')
+            .map(|x| x.parse())
+            .collect::<Result<_, _>>()?;
+        if elements.len() == 3 {
+            Ok(Dimension {
+                l: elements[0],
+                w: elements[1],
+                h: elements[2],
+            })
+        } else {
+            Err("Invalid number of elements".into())
+        }
+    }
+}
+
+impl Dimension {
+    pub fn required_wrapping_paper(&self) -> u32 {
+        let face_areas = self.face_areas();
+        face_areas.iter().sum::<u32>() * 2 + face_areas.iter().min().unwrap()
+    }
+
+    pub fn required_ribbon(&self) -> u32 {
+        self.face_perimeters().iter().min().unwrap() + self.volume()
+    }
+
+    pub fn face_areas(&self) -> [u32; 3] {
+        [self.l * self.w, self.w * self.h, self.h * self.l]
+    }
+
+    fn face_perimeters(&self) -> [u32; 3] {
+        [
+            2 * (self.l + self.w),
+            2 * (self.w + self.h),
+            2 * (self.h + self.l),
+        ]
+    }
+
+    fn volume(&self) -> u32 {
+        return self.l * self.w * self.h;
+    }
+}
+
+pub fn part1(input: &str) -> u32 {
+    input
+        .lines()
+        .map(|dimension_str| {
+            dimension_str
+                .parse::<Dimension>()
+                .unwrap()
+                .required_wrapping_paper()
+        })
+        .sum()
+}
+
+pub fn part2(input: &str) -> u32 {
+    input
+        .lines()
+        .map(|dimension_str| {
+            dimension_str
+                .parse::<Dimension>()
+                .unwrap()
+                .required_ribbon()
+        })
+        .sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_box_from_str() {
+        assert_eq!(
+            "12x3x4".parse::<Dimension>().unwrap(),
+            Dimension { l: 12, w: 3, h: 4 }
+        );
+        assert!("1x2x3x4".parse::<Dimension>().is_err());
+        assert!("1xa".parse::<Dimension>().is_err());
+    }
+
+    #[test]
+    fn test_required_wrapping_paper() {
+        assert_eq!(
+            "2x3x4"
+                .parse::<Dimension>()
+                .unwrap()
+                .required_wrapping_paper(),
+            58
+        );
+
+        assert_eq!(
+            "1x1x10"
+                .parse::<Dimension>()
+                .unwrap()
+                .required_wrapping_paper(),
+            43
+        );
+    }
+
+    #[test]
+    fn test_required_ribbon() {
+        assert_eq!(
+            "2x3x4"
+                .parse::<Dimension>()
+                .unwrap()
+                .required_ribbon(),
+            34
+        );
+
+        assert_eq!(
+            "1x1x10"
+                .parse::<Dimension>()
+                .unwrap()
+                .required_ribbon(),
+            14
+        );
+    }
+}
