@@ -1,24 +1,58 @@
+use super::Challenge;
 use std::error::Error;
 use std::str::FromStr;
 
-pub static INPUT: &str = include_str!("../input/day02.txt");
+pub struct Day02 {}
+
+impl Challenge for Day02 {
+    type Input = Vec<Dimensions>;
+
+    fn day() -> u8 {
+        2
+    }
+
+    fn get_input() -> Self::Input {
+        INPUT
+            .lines()
+            .map(|dimensions_str| dimensions_str.parse::<Dimensions>().unwrap())
+            .collect()
+    }
+
+    fn solve_part1(input: &Self::Input) -> String {
+        input
+            .iter()
+            .map(|dimensions| dimensions.required_wrapping_paper())
+            .sum::<u32>()
+            .to_string()
+    }
+
+    fn solve_part2(input: &Self::Input) -> String {
+        input
+            .iter()
+            .map(|dimensions| dimensions.required_ribbon())
+            .sum::<u32>()
+            .to_string()
+    }
+}
+
+pub static INPUT: &str = include_str!("../../input/day02.txt");
 
 #[derive(Debug, PartialEq)]
-struct Dimension {
+pub struct Dimensions {
     l: u32,
     w: u32,
     h: u32,
 }
 
-impl FromStr for Dimension {
+impl FromStr for Dimensions {
     type Err = Box<dyn Error>;
-    fn from_str(value: &str) -> Result<Dimension, Self::Err> {
+    fn from_str(value: &str) -> Result<Dimensions, Self::Err> {
         let elements: Vec<_> = value
             .split('x')
             .map(|x| x.parse())
             .collect::<Result<_, _>>()?;
         if elements.len() == 3 {
-            Ok(Dimension {
+            Ok(Dimensions {
                 l: elements[0],
                 w: elements[1],
                 h: elements[2],
@@ -29,7 +63,7 @@ impl FromStr for Dimension {
     }
 }
 
-impl Dimension {
+impl Dimensions {
     pub fn required_wrapping_paper(&self) -> u32 {
         let face_areas = self.face_areas();
         face_areas.iter().sum::<u32>() * 2 + face_areas.iter().min().unwrap()
@@ -56,30 +90,6 @@ impl Dimension {
     }
 }
 
-pub fn part1(input: &str) -> u32 {
-    input
-        .lines()
-        .map(|dimension_str| {
-            dimension_str
-                .parse::<Dimension>()
-                .unwrap()
-                .required_wrapping_paper()
-        })
-        .sum()
-}
-
-pub fn part2(input: &str) -> u32 {
-    input
-        .lines()
-        .map(|dimension_str| {
-            dimension_str
-                .parse::<Dimension>()
-                .unwrap()
-                .required_ribbon()
-        })
-        .sum()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,18 +97,18 @@ mod tests {
     #[test]
     fn test_box_from_str() {
         assert_eq!(
-            "12x3x4".parse::<Dimension>().unwrap(),
-            Dimension { l: 12, w: 3, h: 4 }
+            "12x3x4".parse::<Dimensions>().unwrap(),
+            Dimensions { l: 12, w: 3, h: 4 }
         );
-        assert!("1x2x3x4".parse::<Dimension>().is_err());
-        assert!("1xa".parse::<Dimension>().is_err());
+        assert!("1x2x3x4".parse::<Dimensions>().is_err());
+        assert!("1xa".parse::<Dimensions>().is_err());
     }
 
     #[test]
     fn test_required_wrapping_paper() {
         assert_eq!(
             "2x3x4"
-                .parse::<Dimension>()
+                .parse::<Dimensions>()
                 .unwrap()
                 .required_wrapping_paper(),
             58
@@ -106,7 +116,7 @@ mod tests {
 
         assert_eq!(
             "1x1x10"
-                .parse::<Dimension>()
+                .parse::<Dimensions>()
                 .unwrap()
                 .required_wrapping_paper(),
             43
@@ -115,19 +125,10 @@ mod tests {
 
     #[test]
     fn test_required_ribbon() {
-        assert_eq!(
-            "2x3x4"
-                .parse::<Dimension>()
-                .unwrap()
-                .required_ribbon(),
-            34
-        );
+        assert_eq!("2x3x4".parse::<Dimensions>().unwrap().required_ribbon(), 34);
 
         assert_eq!(
-            "1x1x10"
-                .parse::<Dimension>()
-                .unwrap()
-                .required_ribbon(),
+            "1x1x10".parse::<Dimensions>().unwrap().required_ribbon(),
             14
         );
     }

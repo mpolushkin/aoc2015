@@ -1,4 +1,28 @@
-pub static INPUT: &str = include_str!("../input/day01.txt");
+use super::Challenge;
+
+pub struct Day01 {}
+
+impl Challenge for Day01 {
+    type Input = &'static str;
+
+    fn day() -> u8 {
+        1
+    }
+
+    fn get_input() -> Self::Input {
+        INPUT.trim()
+    }
+
+    fn solve_part1(input: &Self::Input) -> String {
+        part1(input).to_string()
+    }
+
+    fn solve_part2(input: &Self::Input) -> String {
+        part2(input).to_string()
+    }
+}
+
+pub static INPUT: &str = include_str!("../../input/day01.txt");
 
 pub fn part1(input: &str) -> i32 {
     let mut floor = 0;
