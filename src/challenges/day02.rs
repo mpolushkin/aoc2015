@@ -2,40 +2,37 @@ use super::Challenge;
 use std::error::Error;
 use std::str::FromStr;
 
-pub struct Day02 {}
-
-impl Challenge for Day02 {
-    type Input = Vec<Dimensions>;
-
-    fn day() -> u8 {
-        2
-    }
-
-    fn get_input() -> Self::Input {
-        INPUT
-            .lines()
-            .map(|dimensions_str| dimensions_str.parse::<Dimensions>().unwrap())
-            .collect()
-    }
-
-    fn solve_part1(input: &Self::Input) -> String {
-        input
-            .iter()
-            .map(|dimensions| dimensions.required_wrapping_paper())
-            .sum::<u32>()
-            .to_string()
-    }
-
-    fn solve_part2(input: &Self::Input) -> String {
-        input
-            .iter()
-            .map(|dimensions| dimensions.required_ribbon())
-            .sum::<u32>()
-            .to_string()
-    }
+pub struct Day02 {
+    list_of_dimensions: Vec<Dimensions>,
 }
 
-pub static INPUT: &str = include_str!("../../input/day02.txt");
+impl Challenge for Day02 {
+    const DAY: u8 = 2;
+    type Part1Solution = u32;
+    type Part2Solution = u32;
+
+    fn new(input: &str) -> Self {
+        let list_of_dimensions: Vec<_> = input
+            .lines()
+            .map(|dimensions_str| dimensions_str.parse::<Dimensions>().unwrap())
+            .collect();
+        Self { list_of_dimensions }
+    }
+
+    fn solve_part1(&self) -> u32 {
+        self.list_of_dimensions
+            .iter()
+            .map(|dimensions| dimensions.required_wrapping_paper())
+            .sum()
+    }
+
+    fn solve_part2(&self) -> u32 {
+        self.list_of_dimensions
+            .iter()
+            .map(|dimensions| dimensions.required_ribbon())
+            .sum()
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub struct Dimensions {

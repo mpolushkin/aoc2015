@@ -1,5 +1,6 @@
 mod cli;
 mod challenges;
+mod challenges_old;
 
 use clap::Parser;
 use challenges::Challenges;

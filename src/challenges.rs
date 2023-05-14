@@ -2,43 +2,58 @@ pub mod day01;
 pub mod day02;
 
 use std::collections::HashMap;
+use std::fmt::Display;
+use std::fs;
 
-trait Challenge {
-    type Input;
+pub trait Challenge {
+    const DAY: u8;
+    type Part1Solution: Display;
+    type Part2Solution: Display;
 
-    fn day() -> u8;
-    fn get_input() -> Self::Input;
-    fn solve_part1(_input: &Self::Input) -> String {
-        "<not implemented>".into()
-    }
-    fn solve_part2(_input: &Self::Input) -> String {
-        "<not implemented>".into()
-    }
-
-    fn print_solutions() {
-        let input = Self::get_input();
-        println!("Part 1: {}", Self::solve_part1(&input));
-        println!("Part 2: {}", Self::solve_part2(&input));
-    }
+    fn new(input: &str) -> Self;
+    fn solve_part1(&self) -> Self::Part1Solution;
+    fn solve_part2(&self) -> Self::Part2Solution;
 }
 
+struct FormattedSolutions {
+    part1: String,
+    part2: String,
+}
+type FormatSolutionsFn = fn(input: &str) -> FormattedSolutions;
+
 pub struct Challenges {
-    challenges_by_day: HashMap<u8, fn () -> ()>
+    challenges_by_day: HashMap<u8, FormatSolutionsFn>,
+}
+
+fn solve_challenge_and_format_solutions<T: Challenge>(input: &str) -> FormattedSolutions {
+    let challenge = T::new(input);
+    FormattedSolutions {
+        part1: challenge.solve_part1().to_string(),
+        part2: challenge.solve_part2().to_string(),
+    }
 }
 
 impl Challenges {
     pub fn new() -> Challenges {
-        let mut challenges = Challenges {challenges_by_day: HashMap::new()};
-        challenges.register(day01::Day01{});
-        challenges.register(day02::Day02{});
+        let mut challenges = Challenges {
+            challenges_by_day: HashMap::new(),
+        };
+        challenges.register::<day01::Day01>();
+        challenges.register::<day02::Day02>();
         challenges
     }
 
-    pub fn print_solutions(&self, day: u8) {
-        self.challenges_by_day.get(&day).unwrap()();
+    fn register<T: Challenge>(&mut self) {
+        self.challenges_by_day
+            .insert(T::DAY, solve_challenge_and_format_solutions::<T>);
     }
 
-    fn register<T: Challenge>(&mut self, _challenge: T) {
-        self.challenges_by_day.insert(T::day(), T::print_solutions);
+    pub fn print_solutions(&self, day: u8) {
+        let input = fs::read_to_string(format!("./input/day{:02}.txt", day)).unwrap();
+        let solutions = self.challenges_by_day.get(&day).unwrap()(&input);
+
+        println!("Solutions for day {}:", day);
+        println!("  part 1: {} ", solutions.part1);
+        println!("  part 2: {} ", solutions.part2);
     }
 }
