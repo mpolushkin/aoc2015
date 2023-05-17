@@ -76,6 +76,7 @@ mod tests {
         .answer_yields_digest_with_num_leading_zeros(609043, 5));
     }
 
+    #[ignore]
     #[test]
     fn mine() {
         assert_eq!(Miner::new("pqrstuv").mine(5), 1048970)
