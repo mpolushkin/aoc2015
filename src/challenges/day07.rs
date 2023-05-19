@@ -1,6 +1,6 @@
 use std::{collections::HashMap, str::FromStr};
 
-use super::{Challenge, NotImplemented};
+use super::Challenge;
 
 pub struct Day07 {
     instructions: Vec<Instruction>,
@@ -9,7 +9,7 @@ pub struct Day07 {
 impl Challenge for Day07 {
     const DAY: u8 = 7;
     type Part1Solution = u16;
-    type Part2Solution = NotImplemented;
+    type Part2Solution = u16;
 
     fn new(input: &str) -> Self {
         let mut instructions: Vec<_> = input
@@ -20,11 +20,29 @@ impl Challenge for Day07 {
         Self { instructions }
     }
     fn solve_part1(&self) -> Self::Part1Solution {
-        let wire_values = Emulator::new().execute_instructions(&self.instructions).unwrap();
+        let wire_values = Emulator::new()
+            .execute_instructions(&self.instructions)
+            .unwrap();
         *wire_values.get("a").unwrap()
     }
     fn solve_part2(&self) -> Self::Part2Solution {
-        NotImplemented {}
+        let original_a_value = self.solve_part1();
+        let b_override: Instruction = format!("{} -> b", original_a_value).parse().unwrap();
+
+        let new_instructions: Vec<_> = self
+            .instructions
+            .iter()
+            .map(|instruction| {
+                if instruction.output == "b" {
+                    &b_override
+                } else {
+                    instruction
+                }
+            })
+            .collect();
+
+        let new_wire_values = Emulator::new().execute_instructions(new_instructions).unwrap();
+        *new_wire_values.get("a").unwrap()
     }
 }
 
@@ -385,14 +403,18 @@ impl Emulator {
         let output_value = match &instruction.expression {
             Expression::Assignment(operand) => self.get_operand_value(&operand)?,
             Expression::Not(operand) => !self.get_operand_value(&operand)?,
-            Expression::And { lhs, rhs } => 
-                self.get_operand_value(&lhs)? & self.get_operand_value(&rhs)?,
-            Expression::Or { lhs, rhs } => 
-                self.get_operand_value(&lhs)? | self.get_operand_value(&rhs)?,
-            Expression::LShift { lhs, rhs } => 
-                self.get_operand_value(&lhs)? << self.get_operand_value(&rhs)?,
-            Expression::RShift { lhs, rhs } => 
-                self.get_operand_value(&lhs)? >> self.get_operand_value(&rhs)?,
+            Expression::And { lhs, rhs } => {
+                self.get_operand_value(&lhs)? & self.get_operand_value(&rhs)?
+            }
+            Expression::Or { lhs, rhs } => {
+                self.get_operand_value(&lhs)? | self.get_operand_value(&rhs)?
+            }
+            Expression::LShift { lhs, rhs } => {
+                self.get_operand_value(&lhs)? << self.get_operand_value(&rhs)?
+            }
+            Expression::RShift { lhs, rhs } => {
+                self.get_operand_value(&lhs)? >> self.get_operand_value(&rhs)?
+            }
         };
 
         self.wire_values
@@ -555,7 +577,10 @@ mod tests {
             "2 -> e",
             "d OR e -> f",
             "f LSHIFT c -> g",
-        ].into_iter().map(|s| s.parse().unwrap()).collect();
+        ]
+        .into_iter()
+        .map(|s| s.parse().unwrap())
+        .collect();
 
         let values = Emulator::new().execute_instructions(&instructions).unwrap();
 
