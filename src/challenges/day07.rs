@@ -8,7 +8,7 @@ pub struct Day07 {
 
 impl Challenge for Day07 {
     const DAY: u8 = 7;
-    type Part1Solution = NotImplemented;
+    type Part1Solution = u16;
     type Part2Solution = NotImplemented;
 
     fn new(input: &str) -> Self {
@@ -20,12 +20,8 @@ impl Challenge for Day07 {
         Self { instructions }
     }
     fn solve_part1(&self) -> Self::Part1Solution {
-        println!();
-        for instruction in &self.instructions {
-            println!("{:?}", instruction);
-        }
-        println!();
-        NotImplemented {}
+        let wire_values = Emulator::new().execute_instructions(&self.instructions).unwrap();
+        *wire_values.get("a").unwrap()
     }
     fn solve_part2(&self) -> Self::Part2Solution {
         NotImplemented {}
@@ -361,6 +357,64 @@ impl<'a> TopologicalSorter<'a> {
     }
 }
 
+type WireValues = HashMap<String, u16>;
+type ComputeError = String;
+struct Emulator {
+    wire_values: WireValues,
+}
+
+impl Emulator {
+    fn new() -> Self {
+        Self {
+            wire_values: WireValues::new(),
+        }
+    }
+
+    fn execute_instructions<'a>(
+        &mut self,
+        instructions: impl IntoIterator<Item = &'a Instruction>,
+    ) -> Result<WireValues, ComputeError> {
+        for instruction in instructions.into_iter() {
+            self.execute_instruction(instruction)?;
+        }
+
+        Ok(std::mem::take(&mut self.wire_values))
+    }
+
+    fn execute_instruction(&mut self, instruction: &Instruction) -> Result<u16, ComputeError> {
+        let output_value = match &instruction.expression {
+            Expression::Assignment(operand) => self.get_operand_value(&operand)?,
+            Expression::Not(operand) => !self.get_operand_value(&operand)?,
+            Expression::And { lhs, rhs } => 
+                self.get_operand_value(&lhs)? & self.get_operand_value(&rhs)?,
+            Expression::Or { lhs, rhs } => 
+                self.get_operand_value(&lhs)? | self.get_operand_value(&rhs)?,
+            Expression::LShift { lhs, rhs } => 
+                self.get_operand_value(&lhs)? << self.get_operand_value(&rhs)?,
+            Expression::RShift { lhs, rhs } => 
+                self.get_operand_value(&lhs)? >> self.get_operand_value(&rhs)?,
+        };
+
+        self.wire_values
+            .insert(instruction.output.clone(), output_value);
+        Ok(output_value)
+    }
+
+    fn get_operand_value(&self, operand: &Operand) -> Result<u16, ComputeError> {
+        match operand {
+            Operand::Constant(value) => Ok(*value),
+            Operand::Wire(wire) => self
+                .wire_values
+                .get(wire)
+                .map(|value| *value)
+                .ok_or(format!(
+                    "tried to use value of {} before it was computed",
+                    wire
+                )),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
@@ -489,5 +543,22 @@ mod tests {
             instructions.sort_topologically();
             assert_topologically_sorted(&instructions);
         }
+    }
+
+    #[test]
+    fn emulator_execute() {
+        let instructions: Vec<Instruction> = [
+            "5 -> a",
+            "3 -> b",
+            "a AND b -> c",
+            "1 -> d",
+            "2 -> e",
+            "d OR e -> f",
+            "f LSHIFT c -> g",
+        ].into_iter().map(|s| s.parse().unwrap()).collect();
+
+        let values = Emulator::new().execute_instructions(&instructions).unwrap();
+
+        assert_eq!(*values.get("g").unwrap(), 6);
     }
 }
