@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use super::{Challenge, NotImplemented};
 
@@ -12,14 +12,19 @@ impl Challenge for Day07 {
     type Part2Solution = NotImplemented;
 
     fn new(input: &str) -> Self {
-        Day07 {
-            instructions: input
-                .lines()
-                .map(|line| line.parse().expect(&format!("invalid line: {}", line)))
-                .collect(),
-        }
+        let mut instructions: Vec<_> = input
+            .lines()
+            .map(|line| line.parse().expect(&format!("invalid line: {}", line)))
+            .collect();
+        instructions.sort_topologically();
+        Self { instructions }
     }
     fn solve_part1(&self) -> Self::Part1Solution {
+        println!();
+        for instruction in &self.instructions {
+            println!("{:?}", instruction);
+        }
+        println!();
         NotImplemented {}
     }
     fn solve_part2(&self) -> Self::Part2Solution {
@@ -33,6 +38,14 @@ struct Instruction {
     output: String,
 }
 
+impl Instruction {
+    fn incoming_wires(&self) -> Dependencies {
+        Dependencies {
+            operands: self.expression.operands(),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum Expression {
     Assignment(Operand),
@@ -43,10 +56,73 @@ enum Expression {
     RShift { lhs: Operand, rhs: Operand },
 }
 
+impl Expression {
+    fn operands(&self) -> Operands {
+        match self {
+            Expression::Assignment(operand) | Expression::Not(operand) => Operands {
+                first_operand: operand,
+                maybe_second_operand: None,
+                cursor: 0,
+            },
+            Expression::And { lhs, rhs }
+            | Expression::Or { lhs, rhs }
+            | Expression::LShift { lhs, rhs }
+            | Expression::RShift { lhs, rhs } => Operands {
+                first_operand: lhs,
+                maybe_second_operand: Some(rhs),
+                cursor: 0,
+            },
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum Operand {
     Constant(u16),
     Wire(String),
+}
+
+#[derive(Debug)]
+struct Operands<'a> {
+    first_operand: &'a Operand,
+    maybe_second_operand: Option<&'a Operand>,
+    cursor: u8,
+}
+
+impl<'a> Iterator for Operands<'a> {
+    type Item = &'a Operand;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.cursor {
+            0 => {
+                self.cursor += 1;
+                Some(self.first_operand)
+            }
+            1 => {
+                self.cursor += 1;
+                self.maybe_second_operand
+            }
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Dependencies<'a> {
+    operands: Operands<'a>,
+}
+
+impl<'a> Iterator for Dependencies<'a> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let operand = self.operands.next()?;
+            if let Operand::Wire(wire) = operand {
+                return Some(&wire);
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -139,7 +215,7 @@ impl InstructionParser {
         let lhs = self.parse_operand()?;
 
         if let Some(Token::Arrow) = self.peek_token() {
-            return Ok(Expression::Assignment(lhs))
+            return Ok(Expression::Assignment(lhs));
         }
 
         let operator_token = self.next_token().ok_or(String::from(
@@ -209,8 +285,86 @@ impl FromStr for Instruction {
     }
 }
 
+trait TopologicalSort {
+    fn sort_topologically(&mut self);
+}
+
+impl TopologicalSort for [Instruction] {
+    fn sort_topologically(&mut self) {
+        TopologicalSorter::new(self).sort();
+    }
+}
+
+struct TopologicalSorter<'a> {
+    instructions: &'a mut [Instruction],
+    sorted_wire_indices: HashMap<String, usize>,
+}
+
+impl<'a> TopologicalSorter<'a> {
+    fn new(instructions: &'a mut [Instruction]) -> Self {
+        Self {
+            instructions,
+            sorted_wire_indices: HashMap::new(),
+        }
+    }
+
+    fn sort(&mut self) {
+        self.find_sorted_wire_indices();
+        self.instructions
+            .sort_by_key(|instruction| self.sorted_wire_indices.get(&instruction.output).unwrap())
+    }
+    fn find_sorted_wire_indices(&mut self) {
+        let mut independent_indices: Vec<usize> = Vec::new();
+        let mut dependent_indices_by_wire: HashMap<&str, Vec<usize>> = HashMap::new();
+
+        for (i, instruction) in self.instructions.iter().enumerate() {
+            if self.is_independent(instruction) {
+                independent_indices.push(i)
+            };
+            for dependency in instruction.incoming_wires() {
+                dependent_indices_by_wire
+                    .entry(dependency)
+                    .or_default()
+                    .push(i);
+            }
+        }
+
+        let mut next_sorted_index = 0usize;
+        loop {
+            match independent_indices.pop() {
+                None => {
+                    break;
+                }
+                Some(index) => {
+                    let instruction = &self.instructions[index];
+                    self.sorted_wire_indices
+                        .insert(instruction.output.clone(), next_sorted_index);
+                    next_sorted_index += 1;
+                    for dependent_index in dependent_indices_by_wire
+                        .entry(&instruction.output)
+                        .or_default()
+                        .iter()
+                    {
+                        if self.is_independent(&self.instructions[*dependent_index]) {
+                            independent_indices.push(*dependent_index);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn is_independent(&self, instruction: &Instruction) -> bool {
+        instruction
+            .incoming_wires()
+            .all(|wire| self.sorted_wire_indices.contains_key(wire))
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
 
     #[test]
@@ -273,5 +427,67 @@ mod tests {
                 output: "c".into()
             }
         );
+    }
+
+    #[test]
+    fn dependencies() {
+        assert!("a AND b -> c"
+            .parse::<Instruction>()
+            .unwrap()
+            .incoming_wires()
+            .eq(["a", "b"].into_iter()));
+        assert!("12 LSHIFT b -> c"
+            .parse::<Instruction>()
+            .unwrap()
+            .incoming_wires()
+            .eq(["b"].into_iter()));
+        assert_eq!(
+            "12 OR 1 -> c"
+                .parse::<Instruction>()
+                .unwrap()
+                .incoming_wires()
+                .count(),
+            0
+        );
+        assert!("NOT a -> c"
+            .parse::<Instruction>()
+            .unwrap()
+            .incoming_wires()
+            .eq(["a"].into_iter()));
+        assert_eq!(
+            "12 -> c"
+                .parse::<Instruction>()
+                .unwrap()
+                .incoming_wires()
+                .count(),
+            0
+        );
+    }
+
+    fn assert_topologically_sorted(instructions: &[Instruction]) {
+        let mut encountered = HashSet::<&str>::new();
+        for instruction in instructions {
+            for dependency in instruction.incoming_wires() {
+                assert!(
+                    encountered.contains(dependency),
+                    "unsatisfied dependency {}",
+                    dependency
+                );
+            }
+            encountered.insert(&instruction.output);
+        }
+    }
+
+    #[test]
+    fn sorting() {
+        for input in [
+            ["1 -> a", "b -> c", "a -> b"],
+            ["b AND a -> xyz", "a -> b", "NOT 3 -> a"],
+        ] {
+            let mut instructions: Vec<Instruction> =
+                input.into_iter().map(|s| s.parse().unwrap()).collect();
+            instructions.sort_topologically();
+            assert_topologically_sorted(&instructions);
+        }
     }
 }
