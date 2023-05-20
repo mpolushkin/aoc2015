@@ -5,6 +5,7 @@ mod day04;
 mod day05;
 mod day06;
 mod day07;
+mod day08;
 
 use std::collections::HashMap;
 use std::fmt::{self, Display};
@@ -20,7 +21,7 @@ pub trait Challenge {
     fn solve_part2(&self) -> Self::Part2Solution;
 }
 
-pub struct NotImplemented {}
+pub struct NotImplemented;
 impl Display for NotImplemented {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "<not implemented>")
@@ -57,6 +58,7 @@ impl Challenges {
         challenges.register::<day05::Day05>();
         challenges.register::<day06::Day06>();
         challenges.register::<day07::Day07>();
+        challenges.register::<day08::Day08>();
         challenges
     }
 
