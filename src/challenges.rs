@@ -10,6 +10,7 @@ mod day09;
 mod day10;
 mod day11;
 mod day12;
+mod day13;
 
 use std::collections::HashMap;
 use std::fmt::{self, Display};
@@ -67,6 +68,7 @@ impl Challenges {
         challenges.register::<day10::Day10>();
         challenges.register::<day11::Day11>();
         challenges.register::<day12::Day12>();
+        challenges.register::<day13::Day13>();
         challenges
     }
 
@@ -77,7 +79,10 @@ impl Challenges {
 
     pub fn print_solutions(&self, day: u8) {
         let input = fs::read_to_string(format!("./input/day{:02}.txt", day)).unwrap();
-        let solutions = self.challenges_by_day.get(&day).unwrap()(&input);
+        let solutions = self
+            .challenges_by_day
+            .get(&day)
+            .expect(&format!("no solution for day {}", day))(&input);
 
         println!("Solutions for day {}:", day);
         println!("  part 1: {} ", solutions.part1);
