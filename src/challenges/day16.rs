@@ -1,6 +1,6 @@
 use std::{collections::HashMap, str::FromStr};
 
-use super::{Challenge, NotImplemented};
+use super::Challenge;
 
 const SUPPLEMENTARY_INPUT: &'static str = "\
     children: 3, \
@@ -20,11 +20,41 @@ pub struct Day16 {
     sues: Vec<Sue>,
 }
 
+impl Day16 {
+    fn find_matching_sue<T: Fn(&str, u32, u32) -> bool + Copy>(&self, strategy: T) -> &Sue {
+        let potential_matches = self
+            .sues
+            .iter()
+            .filter_map(|sue| {
+                if sue.attributes.matches_reference(&self.reference, strategy) {
+                    Some(sue)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let strategy_name = std::any::type_name::<T>();
+        match potential_matches.len() {
+            0 => {
+                panic!("no Sues match using strategy {}", strategy_name)
+            }
+            1 => potential_matches[0],
+            _ => {
+                panic!(
+                    "expected exactly one match using strategy {}, got: {:?}",
+                    strategy_name, potential_matches
+                )
+            }
+        }
+    }
+}
+
 impl Challenge for Day16 {
     const DAY: u8 = 16;
 
     type Part1Solution = u32;
-    type Part2Solution = NotImplemented;
+    type Part2Solution = u32;
 
     fn new(input: &str) -> Self {
         Self {
@@ -37,26 +67,11 @@ impl Challenge for Day16 {
     }
 
     fn solve_part1(&self) -> Self::Part1Solution {
-        let potential_matches = self
-            .sues
-            .iter()
-            .filter_map(|sue| {
-                if sue.attributes.might_match(&self.reference) {
-                    Some(sue)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        if potential_matches.len() != 1 {
-            panic!("expected exactly one match")
-        }
-        potential_matches[0].id
+        self.find_matching_sue(part1_attribute_matches).id
     }
 
     fn solve_part2(&self) -> Self::Part2Solution {
-        NotImplemented
+        self.find_matching_sue(part2_attribute_matches).id
     }
 }
 
@@ -90,17 +105,33 @@ impl Attributes {
         self_
     }
 
-    fn might_match(&self, other: &Attributes) -> bool {
+    fn matches_reference(
+        &self,
+        reference: &Attributes,
+        strategy: impl Fn(&str, u32, u32) -> bool,
+    ) -> bool {
         self.inner
             .iter()
-            .filter_map(|(key, self_value)| {
-                if let Some(other_value) = other.inner.get(key) {
-                    Some((self_value, other_value))
+            .filter_map(|(key, &self_value)| {
+                if let Some(&reference_value) = reference.inner.get(key) {
+                    Some((key, self_value, reference_value))
                 } else {
                     None
                 }
             })
-            .all(|(self_value, other_value)| self_value == other_value)
+            .all(|(key, self_value, other_value)| strategy(key, self_value, other_value))
+    }
+}
+
+fn part1_attribute_matches(_name: &str, tested_value: u32, reference_value: u32) -> bool {
+    tested_value == reference_value
+}
+
+fn part2_attribute_matches(name: &str, tested_value: u32, reference_value: u32) -> bool {
+    match name {
+        "cats" | "trees" => tested_value > reference_value,
+        "pomeranians" | "goldfish" => tested_value < reference_value,
+        _ => tested_value == reference_value,
     }
 }
 
@@ -191,15 +222,42 @@ mod tests {
             ("children".to_owned(), 7),
         ]);
 
-        assert!(reference.might_match(&Attributes::new()));
-        assert!(reference.might_match(&Attributes::with_attributes([
-            ("goldfish".to_owned(), 10),
-            ("children".to_owned(), 7),
-        ])));
+        assert!(reference.matches_reference(&Attributes::new(), part1_attribute_matches));
+        assert!(reference.matches_reference(
+            &Attributes::with_attributes(
+                [("goldfish".to_owned(), 10), ("children".to_owned(), 7),]
+            ),
+            part1_attribute_matches
+        ));
 
-        assert!(!reference.might_match(&Attributes::with_attributes([
-            ("goldfish".to_owned(), 10),
-            ("children".to_owned(), 8),
-        ])));
+        assert!(!reference.matches_reference(
+            &Attributes::with_attributes(
+                [("goldfish".to_owned(), 10), ("children".to_owned(), 8),]
+            ),
+            part1_attribute_matches
+        ));
+    }
+
+    #[test]
+    fn test_part2_matching() {
+        assert!(!part2_attribute_matches("some attribute", 2, 3));
+        assert!(part2_attribute_matches("some attribute", 2, 2));
+        assert!(!part2_attribute_matches("some attribute", 2, 1));
+
+        assert!(!part2_attribute_matches("cats", 2, 3));
+        assert!(!part2_attribute_matches("cats", 2, 2));
+        assert!(part2_attribute_matches("cats", 2, 1));
+
+        assert!(!part2_attribute_matches("trees", 2, 3));
+        assert!(!part2_attribute_matches("trees", 2, 2));
+        assert!(part2_attribute_matches("trees", 2, 1));
+
+        assert!(part2_attribute_matches("pomeranians", 2, 3));
+        assert!(!part2_attribute_matches("pomeranians", 2, 2));
+        assert!(!part2_attribute_matches("pomeranians", 2, 1));
+
+        assert!(part2_attribute_matches("goldfish", 2, 3));
+        assert!(!part2_attribute_matches("goldfish", 2, 2));
+        assert!(!part2_attribute_matches("goldfish", 2, 1));
     }
 }
