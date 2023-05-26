@@ -14,6 +14,7 @@ mod day13;
 mod day14;
 mod day15;
 mod day16;
+mod day17;
 
 use std::collections::HashMap;
 use std::fmt::{self, Display};
@@ -75,6 +76,7 @@ impl Challenges {
         challenges.register::<day14::Day14>();
         challenges.register::<day15::Day15>();
         challenges.register::<day16::Day16>();
+        challenges.register::<day17::Day17>();
         challenges
     }
 
