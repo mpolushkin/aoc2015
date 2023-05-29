@@ -39,9 +39,8 @@ impl Challenge for Day19 {
     fn solve_part2(&self) -> Self::Part2Solution {
         let machine = Machine::with_replacements(self.replacements.clone());
         machine
-            .optimal_recipe(self.input_molecule.clone())
+            .optimal_recipe_len(&self.input_molecule)
             .expect("no valid recipes")
-            .len()
     }
 }
 
@@ -104,9 +103,42 @@ impl Machine {
             self.recipes(target.clone())
                 .inspect(|solution| print_solution(&target, solution, &self.replacements))
                 .inspect(|solution| println!("Solution length: {}", solution.len()))
-                .next()?
-                // .min_by_key(|recipe| recipe.len())?,
+                .next()?, // .min_by_key(|recipe| recipe.len())?,
         )
+    }
+
+    fn optimal_recipe_len(&self, target: &str) -> Option<usize> {
+        if target == "e" {
+            return Some(0);
+        }
+        let mut outputs = HashSet::new();
+        outputs.insert(target.to_owned());
+
+        for i in 1.. {
+            println!("{}", i);
+            outputs = outputs
+                .into_iter()
+                .flat_map(|input| {
+                    PossibleTransformations::new(&self.replacements, input, Direction::Reverse)
+                })
+                .scan(false, |recipe_found, (candidate, _)| {
+                    if *recipe_found {
+                        None
+                    } else {
+                        if candidate == "e" {
+                            *recipe_found = true;
+                        }
+                        Some(candidate)
+                    }
+                })
+                .collect();
+            if outputs.is_empty() {
+                return None;
+            } else if outputs.contains("e") {
+                return Some(i);
+            }
+        }
+        None
     }
 }
 
@@ -359,5 +391,10 @@ mod tests {
             machine.optimal_recipe("HOHOHO".to_owned()).unwrap().len(),
             6
         );
+        assert_eq!(machine.optimal_recipe_len(""), None);
+        assert_eq!(machine.optimal_recipe_len("e").unwrap(), 0);
+        assert_eq!(machine.optimal_recipe_len("H").unwrap(), 1);
+        assert_eq!(machine.optimal_recipe_len("HOH").unwrap(), 3);
+        assert_eq!(machine.optimal_recipe_len("HOHOHO").unwrap(), 6);
     }
 }
