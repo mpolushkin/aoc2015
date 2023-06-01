@@ -1,4 +1,5 @@
-use std::collections::HashSet;
+use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::rc::Rc;
 use std::str::FromStr;
 
 use super::Challenge;
@@ -39,15 +40,35 @@ impl Challenge for Day19 {
     fn solve_part2(&self) -> Self::Part2Solution {
         let machine = Machine::with_replacements(self.replacements.clone());
         machine
-            .optimal_recipe_len(&self.input_molecule)
+            .optimal_recipe_a_star(self.input_molecule.clone())
             .expect("no valid recipes")
+        // machine
+        //     .optimal_recipe_len(&self.input_molecule)
+        //     .expect("no valid recipes")
+        // machine
+        //     .optimal_recipe(self.input_molecule.clone())
+        //     .expect("no valid recipes")
+        //     .len()
     }
+}
+
+fn molecule_length(molecule: &str) -> usize {
+    molecule
+        .bytes()
+        .filter(|&byte| byte.is_ascii_uppercase() || byte == b'e')
+        .count()
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct Replacement {
     pattern: String,
     result: String,
+}
+
+impl Replacement {
+    fn molecule_diff(&self) -> usize {
+        molecule_length(&self.result) - molecule_length(&self.pattern)
+    }
 }
 
 type Error = String;
@@ -89,6 +110,7 @@ impl Machine {
 
     fn calibrate(&self, input: String) -> HashSet<String> {
         PossibleTransformations::new(&self.replacements, input, Direction::Forward)
+            .unique_molecules()
             .map(|(output, _)| output)
             .collect()
     }
@@ -105,6 +127,10 @@ impl Machine {
                 .inspect(|solution| println!("Solution length: {}", solution.len()))
                 .next()?, // .min_by_key(|recipe| recipe.len())?,
         )
+    }
+
+    fn optimal_recipe_a_star(&self, target: String) -> Option<usize> {
+        RecipeFinder::new(target, &self.replacements).find_shortest_path()
     }
 
     fn optimal_recipe_len(&self, target: &str) -> Option<usize> {
@@ -220,6 +246,11 @@ impl<'a> PossibleTransformations<'a> {
                 input_index: self.input_cursor,
             },
         ))
+    }
+
+    fn unique_molecules(self) -> impl Iterator<Item = (String, TransformationInfo)> {
+        self.collect::<HashMap<String, TransformationInfo>>()
+            .into_iter()
     }
 }
 
@@ -341,8 +372,134 @@ impl<'a> Iterator for Recipes<'a> {
     }
 }
 
+#[derive(PartialEq, Eq)]
+struct NodeWithDistanceThrough {
+    node: Rc<String>,
+    distance_through: usize,
+}
+
+impl Ord for NodeWithDistanceThrough {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // reverse ordering on distance_through to turn BinaryHeap into a min-heap
+        other
+            .distance_through
+            .cmp(&self.distance_through)
+            .then_with(|| self.node.cmp(&other.node))
+    }
+}
+
+impl PartialOrd for NodeWithDistanceThrough {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+struct RecipeFinder<'a> {
+    replacements: &'a [Replacement],
+    max_diff_per_step: usize,
+    node_distances_to: HashMap<Rc<String>, usize>,
+    node_distances_through: HashMap<Rc<String>, usize>,
+    unvisited: BinaryHeap<NodeWithDistanceThrough>,
+}
+
+impl<'a> RecipeFinder<'a> {
+    const ELECTRON: &'static str = "e";
+
+    fn new(target: String, replacements: &'a [Replacement]) -> Self {
+        let max_diff_per_step = replacements
+            .into_iter()
+            .map(|replacement| replacement.molecule_diff())
+            .max()
+            .expect("replacement list is empty");
+        let mut self_ = Self {
+            replacements,
+            max_diff_per_step,
+            node_distances_to: HashMap::new(),
+            node_distances_through: HashMap::new(),
+            unvisited: BinaryHeap::new(),
+        };
+        self_.register_node(target, 0);
+        self_
+    }
+
+    fn register_node(&mut self, node: String, distance_to: usize) {
+        let node = Rc::new(node);
+        self.node_distances_to.insert(node.clone(), distance_to);
+        let distance_through = distance_to + self.estimate_distance_from(&node);
+        self.node_distances_through
+            .insert(node.clone(), distance_through);
+        self.unvisited.push(NodeWithDistanceThrough {
+            node: node.clone(),
+            distance_through,
+        })
+    }
+
+    fn distance_to(&self, node: &String) -> usize {
+        self.node_distances_to
+            .get(node)
+            .copied()
+            .unwrap_or(usize::MAX)
+    }
+
+    fn distance_through(&self, node: &String) -> usize {
+        self.node_distances_through
+            .get(node)
+            .copied()
+            .unwrap_or(usize::MAX)
+    }
+
+    fn estimate_distance_from(&self, node: &String) -> usize {
+        let needed_diff = molecule_length(node).saturating_sub(1);
+        let remainder = needed_diff % self.max_diff_per_step;
+        needed_diff / self.max_diff_per_step + if remainder > 0 { 1 } else { 0 }
+    }
+
+    fn find_shortest_path(mut self) -> Option<usize> {
+        let mut max_distance_through = 0;
+        while let Some(NodeWithDistanceThrough {
+            node: current,
+            distance_through: current_distance_through,
+        }) = self.unvisited.pop()
+        {
+            let current_distance = self.distance_to(&current);
+
+            if current_distance_through > max_distance_through {
+                max_distance_through = current_distance_through;
+                println!(
+                    "distance_to: {:4}, distance_through: {:4} - {}",
+                    current_distance, current_distance_through, current
+                );
+            }
+
+            if *current == Self::ELECTRON {
+                return Some(current_distance);
+            }
+
+            if self.distance_through(&current) < current_distance_through {
+                continue; // we've already found a shorter path to this node
+            }
+
+            let neighbor_distance = current_distance + 1;
+            for (neighbor, _) in PossibleTransformations::new(
+                &self.replacements,
+                (*current).clone(),
+                Direction::Reverse,
+            )
+            .unique_molecules()
+            {
+                if neighbor_distance < self.distance_to(&neighbor) {
+                    self.register_node(neighbor, neighbor_distance)
+                }
+            }
+        }
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+
     use super::*;
 
     #[test]
@@ -396,5 +553,38 @@ mod tests {
         assert_eq!(machine.optimal_recipe_len("H").unwrap(), 1);
         assert_eq!(machine.optimal_recipe_len("HOH").unwrap(), 3);
         assert_eq!(machine.optimal_recipe_len("HOHOHO").unwrap(), 6);
+
+        assert_eq!(machine.optimal_recipe_a_star("".to_owned()), None);
+        assert_eq!(machine.optimal_recipe_a_star("e".to_owned()).unwrap(), 0);
+        assert_eq!(machine.optimal_recipe_a_star("H".to_owned()).unwrap(), 1);
+        assert_eq!(machine.optimal_recipe_a_star("HOH".to_owned()).unwrap(), 3);
+        assert_eq!(machine.optimal_recipe_a_star("HOHOHO".to_owned()).unwrap(), 6);
+
+        assert!(false);
+    }
+
+    #[test]
+    fn test_molecule_length() {
+        assert_eq!(molecule_length(""), 0);
+        assert_eq!(molecule_length("e"), 1);
+        assert_eq!(molecule_length("H"), 1);
+        assert_eq!(molecule_length("Mg"), 1);
+        assert_eq!(molecule_length("CRnFAr"), 4);
+
+        assert_eq!(
+            "Al => ThF".parse::<Replacement>().unwrap().molecule_diff(),
+            1
+        );
+        assert_eq!(
+            "H => CRnFYFYFAr"
+                .parse::<Replacement>()
+                .unwrap()
+                .molecule_diff(),
+            7
+        );
+        assert_eq!(
+            "e => OMg".parse::<Replacement>().unwrap().molecule_diff(),
+            1
+        );
     }
 }
