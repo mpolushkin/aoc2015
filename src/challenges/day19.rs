@@ -498,8 +498,6 @@ impl<'a> RecipeFinder<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
-
     use super::*;
 
     #[test]
@@ -559,8 +557,6 @@ mod tests {
         assert_eq!(machine.optimal_recipe_a_star("H".to_owned()).unwrap(), 1);
         assert_eq!(machine.optimal_recipe_a_star("HOH".to_owned()).unwrap(), 3);
         assert_eq!(machine.optimal_recipe_a_star("HOHOHO".to_owned()).unwrap(), 6);
-
-        assert!(false);
     }
 
     #[test]
