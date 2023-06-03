@@ -10,7 +10,7 @@ impl Challenge for Day20 {
     const DAY: u8 = 20;
 
     type Part1Solution = u32;
-    type Part2Solution = NotImplemented;
+    type Part2Solution = u32;
 
     fn new(input: &str) -> Self {
         Self {
@@ -35,7 +35,18 @@ impl Challenge for Day20 {
     }
 
     fn solve_part2(&self) -> Self::Part2Solution {
-        NotImplemented
+        let stamina = 50;
+        let multiplier = 11;
+        let min_house = (self.input as f64
+            / multiplier as f64
+            / (1..=stamina).map(|n| 1. / (n as f64)).sum::<f64>()) as u32;
+        for house in min_house.. {
+            let num_presents = presents_stamina(house, stamina, 11);
+            if num_presents >= self.input {
+                return house;
+            }
+        }
+        0
     }
 }
 
@@ -93,8 +104,7 @@ impl PresentsUsingPrimes {
 
     fn sum_of_factors(&mut self) -> u32 {
         let prime_factors = self.prime_factors();
-        self.all_divisors_from_prime_factors(&prime_factors)
-            .sum()
+        self.all_divisors_from_prime_factors(&prime_factors).sum()
     }
 }
 
@@ -162,6 +172,19 @@ impl<'a> Iterator for AllDivisorsFromPrimeFactors<'a> {
     }
 }
 
+fn presents_stamina(house: u32, stamina: u32, multiplier: u32) -> u32 {
+    (1..=stamina)
+        .filter_map(|divisor| {
+            if house % divisor == 0 {
+                Some(house / divisor)
+            } else {
+                None
+            }
+        })
+        .sum::<u32>()
+        * multiplier
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,5 +221,23 @@ mod tests {
         assert_eq!(presents_naive(9), presents_using_primes.next().unwrap().1);
         assert_eq!(presents_naive(10), presents_using_primes.next().unwrap().1);
         assert_eq!(presents_naive(11), presents_using_primes.next().unwrap().1);
+    }
+
+    #[test]
+    fn test_limited_stamina() {
+        assert_eq!(presents_stamina(1, 5, 10), 10);
+        assert_eq!(presents_stamina(2, 5, 10), 30); //    2, 1
+        assert_eq!(presents_stamina(3, 5, 10), 40); //    3, 1
+        assert_eq!(presents_stamina(4, 5, 10), 70); //    4, 1, 2
+        assert_eq!(presents_stamina(5, 5, 10), 60); //    5, 1
+        assert_eq!(presents_stamina(6, 5, 10), 110); //   6, 2, 3       not: 1
+        assert_eq!(presents_stamina(7, 5, 10), 70); //    7             not: 1
+        assert_eq!(presents_stamina(8, 5, 10), 140); //   8, 2, 4       not: 1
+        assert_eq!(presents_stamina(9, 5, 10), 120); //   9, 3          not: 1
+        assert_eq!(presents_stamina(10, 5, 10), 170); // 10, 2, 5       not: 1
+        assert_eq!(presents_stamina(11, 5, 10), 110); // 11             not: 1
+        assert_eq!(presents_stamina(12, 5, 10), 250); // 12, 3, 4, 6    not: 1, 2
+
+        assert_eq!(presents_stamina(36, 5, 10), 750); // 36, 9, 12, 18   not:  1, 2, 3, 4, 6
     }
 }
