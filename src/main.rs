@@ -1,8 +1,10 @@
-mod cli;
-mod challenges;
+#![allow(dead_code)]
 
-use clap::Parser;
+mod challenges;
+mod cli;
+
 use challenges::Challenges;
+use clap::Parser;
 
 fn main() {
     let args = cli::Args::parse();

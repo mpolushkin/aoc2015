@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use super::{Challenge, NotImplemented};
+use super::Challenge;
 
 pub struct Day20 {
     input: u32,
