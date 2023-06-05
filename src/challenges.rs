@@ -84,6 +84,7 @@ impl Challenges {
         challenges.register::<day18::Day18>();
         challenges.register::<day19::Day19>();
         challenges.register::<day20::Day20>();
+        challenges.register::<day21::Day21>();
         challenges
     }
 
