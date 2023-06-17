@@ -5,7 +5,7 @@ use std::{
     str::FromStr,
 };
 
-use super::{Challenge, NotImplemented};
+use super::Challenge;
 
 pub struct Day22 {
     boss: Boss,
@@ -15,7 +15,7 @@ impl Challenge for Day22 {
     const DAY: u8 = 22;
 
     type Part1Solution = u32;
-    type Part2Solution = NotImplemented;
+    type Part2Solution = u32;
 
     fn new(input: &str) -> Self {
         Self {
@@ -24,12 +24,17 @@ impl Challenge for Day22 {
     }
 
     fn solve_part1(&self) -> Self::Part1Solution {
-        let initial_state = Game::new(Player::new(50, 500), self.boss);
-        DijkstraOptimizer::new(initial_state).find_lowest_mana_cost_to_win().unwrap()
+        let initial_state = Game::new(Player::new(50, 500), self.boss, Difficulty::Normal);
+        DijkstraOptimizer::new(initial_state)
+            .find_lowest_mana_cost_to_win()
+            .unwrap()
     }
 
     fn solve_part2(&self) -> Self::Part2Solution {
-        NotImplemented
+        let initial_state = Game::new(Player::new(50, 500), self.boss, Difficulty::Hard);
+        DijkstraOptimizer::new(initial_state)
+            .find_lowest_mana_cost_to_win()
+            .unwrap()
     }
 }
 
@@ -230,18 +235,26 @@ impl Display for GameError {
 impl std::error::Error for GameError {}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
+enum Difficulty {
+    Normal,
+    Hard,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 struct Game {
     player: Player,
     boss: Boss,
     effect_timers: EffectTimers,
+    difficulty: Difficulty,
 }
 
 impl Game {
-    pub fn new(player: Player, boss: Boss) -> Self {
+    pub fn new(player: Player, boss: Boss, difficulty: Difficulty) -> Self {
         Self {
             player,
             boss,
             effect_timers: EffectTimers::new(),
+            difficulty,
         }
     }
 
@@ -278,7 +291,8 @@ impl Game {
     pub fn player_take_turn(&mut self, spell: Spell) -> Result<Option<Winner>, GameError> {
         self.assert_no_winner_yet()?;
         self.assert_player_can_cast(spell)?;
-        self.apply_active_effects()
+        self.apply_player_difficulty_modifier()
+            .and_then(|()| self.apply_active_effects())
             .and_then(|()| self.player_cast_spell(spell))
             .map_or_else(|winner| Ok(Some(winner)), |()| Ok(None))
     }
@@ -303,7 +317,8 @@ impl Game {
             return Err(GameError::NotEnoughMana);
         }
         if let Some(effect) = spell.effect() {
-            if self.effect_timers.is_active(effect) {
+            if self.effect_timers.timer(effect) > 1 {
+                // timer of 1 will expire before player casts the spell again, so that's allowed
                 return Err(GameError::EffectAlreadyActive);
             }
         }
@@ -315,6 +330,13 @@ impl Game {
             None => Ok(()),
             Some(winner) => Err(winner),
         }
+    }
+
+    fn apply_player_difficulty_modifier(&mut self) -> Result<(), Winner> {
+        if self.difficulty == Difficulty::Hard {
+            deal_damage(&mut self.player.hit_points, 1);
+        }
+        self.winner_result()
     }
 
     fn activate_effect(&mut self, effect: Effect, duration: u8) {
@@ -528,7 +550,7 @@ mod tests {
 
     #[test]
     fn test_game_scenario_1() {
-        let mut game = Game::new(Player::new(10, 250), Boss::new(13, 8));
+        let mut game = Game::new(Player::new(10, 250), Boss::new(13, 8), Difficulty::Normal);
         assert_eq!(
             game.player().to_string(),
             "Player has 10 hit points, 0 armor, 250 mana"
@@ -563,7 +585,7 @@ mod tests {
 
     #[test]
     fn test_game_scenario_2() {
-        let mut game = Game::new(Player::new(10, 250), Boss::new(14, 8));
+        let mut game = Game::new(Player::new(10, 250), Boss::new(14, 8), Difficulty::Normal);
         assert_eq!(
             game.player().to_string(),
             "Player has 10 hit points, 0 armor, 250 mana"
