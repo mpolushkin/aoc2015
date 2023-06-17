@@ -1,6 +1,39 @@
-use std::{cmp::max, collections::HashMap, fmt::Display, str::FromStr};
+use std::{
+    cmp::max,
+    collections::{BinaryHeap, HashMap},
+    fmt::Display,
+    str::FromStr,
+};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use super::{Challenge, NotImplemented};
+
+pub struct Day22 {
+    boss: Boss,
+}
+
+impl Challenge for Day22 {
+    const DAY: u8 = 22;
+
+    type Part1Solution = u32;
+    type Part2Solution = NotImplemented;
+
+    fn new(input: &str) -> Self {
+        Self {
+            boss: input.parse::<Boss>().unwrap(),
+        }
+    }
+
+    fn solve_part1(&self) -> Self::Part1Solution {
+        let initial_state = Game::new(Player::new(50, 500), self.boss);
+        DijkstraOptimizer::new(initial_state).find_lowest_mana_cost_to_win().unwrap()
+    }
+
+    fn solve_part2(&self) -> Self::Part2Solution {
+        NotImplemented
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct Player {
     hit_points: u32,
     armor: u32,
@@ -30,7 +63,7 @@ impl Display for Player {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct Boss {
     hit_points: u32,
     damage: u32,
@@ -122,6 +155,7 @@ impl Effect {
     }
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 struct EffectTimers {
     shield_timer: u8,
     poison_timer: u8,
@@ -195,6 +229,7 @@ impl Display for GameError {
 
 impl std::error::Error for GameError {}
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 struct Game {
     player: Player,
     boss: Boss,
@@ -229,6 +264,14 @@ impl Game {
             Some(Winner::Player)
         } else {
             None
+        }
+    }
+
+    pub fn play_round(&mut self, player_spell: Spell) -> Result<Option<Winner>, GameError> {
+        if let Some(winner) = self.player_take_turn(player_spell)? {
+            Ok(Some(winner))
+        } else {
+            self.boss_take_turn()
         }
     }
 
@@ -365,6 +408,104 @@ impl FromStr for Boss {
                 .get("Damage")
                 .ok_or_else(|| "damage not defined".to_owned())?,
         })
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Copy)]
+struct Node {
+    total_mana_cost: u32,
+    game_state: Game,
+}
+
+impl PartialOrd for Node {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Node {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // reverse ordering by mana cost to make BinaryHeap a min heap
+        other
+            .total_mana_cost
+            .cmp(&self.total_mana_cost)
+            .then(self.game_state.cmp(&other.game_state))
+    }
+}
+
+struct DijkstraOptimizer {
+    node_distances: HashMap<Game, u32>,
+    unvisited: BinaryHeap<Node>,
+}
+
+impl DijkstraOptimizer {
+    const SPELLS: &[Spell] = &[
+        Spell::MagicMissile,
+        Spell::Drain,
+        Spell::Shield,
+        Spell::Poison,
+        Spell::Recharge,
+    ];
+
+    fn new(initial_state: Game) -> Self {
+        let mut self_ = Self {
+            node_distances: HashMap::new(),
+            unvisited: BinaryHeap::new(),
+        };
+        self_.register_neighbors(&Node {
+            total_mana_cost: 0,
+            game_state: initial_state,
+        });
+        self_
+    }
+
+    fn find_lowest_mana_cost_to_win(mut self) -> Option<u32> {
+        while let Some(node) = self.unvisited.pop() {
+            if let Some(winner) = node.game_state.winner() {
+                match winner {
+                    Winner::Player => return Some(node.total_mana_cost), // reached goal!
+                    Winner::Boss => unreachable!(), // filtered out before being pushed on heap
+                }
+            }
+
+            if self.node_distances[&node.game_state] < node.total_mana_cost {
+                continue; // we already found a shorter path to this state
+            }
+
+            self.register_neighbors(&node);
+        }
+        // No way to win
+        None
+    }
+
+    fn register_neighbors(&mut self, current_node: &Node) {
+        for spell in Self::SPELLS {
+            self.register_neighbor(&current_node, *spell)
+        }
+    }
+
+    fn register_neighbor(&mut self, current_node: &Node, spell: Spell) {
+        let mut neighbor_game_state = current_node.game_state;
+        if let Ok(winner) = neighbor_game_state.play_round(spell) {
+            if let Some(Winner::Boss) = winner {
+                return;
+            }
+
+            let neighbor_cost = current_node.total_mana_cost + spell.mana_cost();
+            if neighbor_cost
+                < *self
+                    .node_distances
+                    .get(&neighbor_game_state)
+                    .unwrap_or(&u32::MAX)
+            {
+                self.node_distances
+                    .insert(neighbor_game_state, neighbor_cost);
+                self.unvisited.push(Node {
+                    total_mana_cost: neighbor_cost,
+                    game_state: neighbor_game_state,
+                })
+            }
+        }
     }
 }
 
